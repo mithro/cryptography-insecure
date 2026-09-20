@@ -48,9 +48,15 @@ Description: private cryptography copy for python3-paramiko-insecure
 """
 
 
-def rewrite_python(path):
-    """Rename module references in one .py file, on tokens, not text."""
-    module_path = re.compile(rf"^{OLD}(\.[A-Za-z_]\w*)*$")
+def rewrite_python(path, bare_name=True):
+    """Rename module references in one .py file, on tokens, not text.
+
+    With bare_name=False a string that is exactly "cryptography" is left
+    alone: inside src/_cffi_src that names _cffi_src's own submodule
+    (openssl/cryptography.py), not this package.
+    """
+    dots = "*" if bare_name else "+"
+    module_path = re.compile(rf"^{OLD}(\.[A-Za-z_]\w*){dots}$")
     string_prefix = re.compile(r"^([rRbBuUfF]{0,2})('''|\"\"\"|'|\")")
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
     edits = []
@@ -145,11 +151,19 @@ def main():
     edits = sum(rewrite_python(p) for p in sorted(package.rglob("*.py")))
     print(f"python: {edits} references rewritten")
 
-    # src/_cffi_src is a build-time helper, not part of the package, and it
-    # has a submodule of its own called "cryptography"
-    # (_cffi_src/openssl/cryptography.py) which must keep its name. Only its
-    # one reference to the package directory is rewritten, by hand.
-    edit(root / "src" / "_cffi_src" / "utils.py", [
+    # src/_cffi_src is a build-time helper, not part of the package, but it
+    # names the compiled bindings: "cryptography.hazmat.bindings._openssl"
+    # decides where the .so is installed, and getting it wrong ships a file
+    # on top of python3-cryptography's. Dotted paths are rewritten; the bare
+    # string "cryptography" is not, because there it means _cffi_src's own
+    # submodule openssl/cryptography.py.
+    cffi = root / "src" / "_cffi_src"
+    cffi_edits = sum(rewrite_python(p, bare_name=False)
+                     for p in sorted(cffi.rglob("*.py")))
+    print(f"_cffi_src: {cffi_edits} references rewritten")
+    # The one bare reference that does mean this package: the path it joins
+    # to reach __about__.py.
+    edit(cffi / "utils.py", [
         ('os.path.join(base_src, "cryptography", "__about__.py")',
          f'os.path.join(base_src, "{NEW}", "__about__.py")'),
     ])

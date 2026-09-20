@@ -53,6 +53,19 @@ mk-build-deps --install --remove \
 DEB_BUILD_OPTIONS=nocheck DEB_BUILD_PROFILES=nocheck \
     dpkg-buildpackage -us -uc -b
 
+deb=$(ls ../python3-cryptography-insecure_*.deb | head -1)
+
+# Nothing may ship under the system cryptography's names. The compiled
+# bindings are the trap here: their install path comes from a module name
+# in src/_cffi_src, and getting it wrong drops a .so straight on top of
+# python3-cryptography's. dpkg would refuse the install, but only on a
+# machine that had both -- so check it at build time.
+if dpkg-deb -c "$deb" | awk '{print $6}' \
+        | grep -E '/cryptography/|/cryptography-[0-9]'; then
+    echo "::error::package ships files under the system cryptography's name"
+    exit 1
+fi
+
 mkdir -p "$OUT"
-cp ../python3-cryptography-insecure_*.deb "$OUT/"
+cp "$deb" "$OUT/"
 ls -lh "$OUT"
