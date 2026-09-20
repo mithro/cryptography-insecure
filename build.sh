@@ -21,12 +21,22 @@ apt-get update
 apt-get install -y --no-install-recommends \
     build-essential ca-certificates devscripts dpkg-dev equivs python3
 
-# deb-src for this suite only: the source must match the suite's Rust and
-# pyo3 packages, which is why nothing is pinned here. signed-by must be
-# given explicitly, or apt refuses the line as conflicting with the image's
-# own sources ("Conflicting values set for option Signed-By").
-printf 'deb-src [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian %s main\n' \
-    "$SUITE" > /etc/apt/sources.list.d/insecure-src.list
+# Source packages, from this suite only: the source must match the suite's
+# own Rust and pyo3 packages, which is why nothing is pinned here.
+#
+# Enable deb-src in the image's existing stanza rather than adding a line of
+# our own: that inherits its Signed-By, and the keyring's name differs
+# between suites (.gpg on bookworm, .pgp from trixie on). Naming the wrong
+# one makes apt refuse every source: "Conflicting values set for option
+# Signed-By".
+sources=/etc/apt/sources.list.d/debian.sources
+if [ -f "$sources" ]; then
+    sed -i 's/^Types: deb$/Types: deb deb-src/' "$sources"
+    grep -q '^Types: deb deb-src$' "$sources"
+else
+    printf 'deb-src http://deb.debian.org/debian %s main\n' "$SUITE" \
+        > /etc/apt/sources.list.d/insecure-src.list
+fi
 apt-get update
 
 rm -rf /tmp/crypto && mkdir -p /tmp/crypto && cd /tmp/crypto
