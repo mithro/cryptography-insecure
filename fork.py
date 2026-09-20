@@ -116,9 +116,18 @@ def main():
     if not package.is_dir():
         raise SystemExit(f"{package} not found -- not a cryptography source?")
 
-    # 1. Python sources.
+    # 1. Python sources of the package itself.
     edits = sum(rewrite_python(p) for p in sorted(package.rglob("*.py")))
     print(f"python: {edits} references rewritten")
+
+    # src/_cffi_src is a build-time helper, not part of the package, and it
+    # has a submodule of its own called "cryptography"
+    # (_cffi_src/openssl/cryptography.py) which must keep its name. Only its
+    # one reference to the package directory is rewritten, by hand.
+    edit(root / "src" / "_cffi_src" / "utils.py", [
+        ('os.path.join(base_src, "cryptography", "__about__.py")',
+         f'os.path.join(base_src, "{NEW}", "__about__.py")'),
+    ])
 
     # 2. Rust sources: module paths only.
     rust = sum(rewrite_rust(p) for p in sorted((root / "src" / "rust").rglob("*.rs")))
