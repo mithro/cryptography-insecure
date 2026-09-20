@@ -97,6 +97,31 @@ def rewrite_rust(path):
     return count
 
 
+def remove_make_target(rules, target):
+    """Delete a make target and its recipe from a debian/rules file.
+
+    Line-based rather than a regex: the recipe may be wrapped in
+    ifeq/endif, and the exact shape differs between Debian releases.
+    """
+    lines = rules.splitlines(keepends=True)
+    try:
+        start = next(i for i, line in enumerate(lines)
+                     if line.startswith(f"{target}:"))
+    except StopIteration:
+        raise SystemExit(f"debian/rules: no {target} to remove")
+    end = start + 1
+    while end < len(lines):
+        line = lines[end]
+        # The recipe continues through indented lines, conditionals and
+        # blank lines; it ends at the next thing starting in column 0.
+        if (line.strip() and not line[0].isspace()
+                and not line.startswith(("ifeq", "ifneq", "else", "endif"))):
+            break
+        end += 1
+    del lines[start:end]
+    return "".join(lines)
+
+
 def edit(path, replacements, required=True):
     text = path.read_text(encoding="utf-8")
     for old, new in replacements:
@@ -137,13 +162,33 @@ def main():
 
     package.rename(root / "src" / NEW)
 
-    # 3. Build metadata. maturin's module-name must match the import path or
-    #    the compiled extension is installed where nothing will look for it.
-    edit(root / "pyproject.toml", [
-        (f'name = "{OLD}"', f'name = "{NEW}"'),
-        (f'module-name = "{OLD}.hazmat.bindings._rust"',
-         f'module-name = "{NEW}.hazmat.bindings._rust"'),
-    ])
+    # 3. Build metadata, in whichever form this version uses. Either way the
+    #    declared extension path must match the new import path, or the
+    #    compiled extension lands where nothing will look for it.
+    pyproject = root / "pyproject.toml"
+    if f'name = "{OLD}"' in pyproject.read_text():
+        # PEP 621 + maturin (cryptography 43 and later).
+        edit(pyproject, [
+            (f'name = "{OLD}"', f'name = "{NEW}"'),
+            (f'module-name = "{OLD}.hazmat.bindings._rust"',
+             f'module-name = "{NEW}.hazmat.bindings._rust"'),
+        ])
+        print("metadata: pyproject.toml (maturin)")
+    else:
+        # setuptools + setuptools-rust (cryptography 38, Debian bookworm),
+        # where the name is in setup.cfg and RustExtension names the module.
+        # `version = attr: cryptography.__version__` is resolved by
+        # importing the module, so it has to follow the rename too. The
+        # other mentions in setup.cfg are URLs and an email address.
+        edit(root / "setup.cfg", [
+            (f"name = {OLD}\n", f"name = {NEW}\n"),
+            (f"version = attr: {OLD}.__version__",
+             f"version = attr: {NEW}.__version__"),
+        ])
+        renamed = rewrite_python(root / "setup.py")
+        if not renamed:
+            raise SystemExit("setup.py: no module path to rename")
+        print(f"metadata: setup.cfg + setup.py ({renamed} references)")
 
     # 4. Debian packaging.
     debian = root / "debian"
@@ -165,12 +210,13 @@ def main():
         ("export DEB_CARGO_CRATE=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM)",
          "export DEB_CARGO_CRATE=python-cryptography_$(DEB_VERSION_UPSTREAM)"),
     ])
-    # Drop the documentation and dh_python3 overrides: both name binary
-    # packages that no longer exist here.
+    # Drop overrides that name binary packages which no longer exist here:
+    # the documentation build (there is no -doc package in this fork) and,
+    # where it singles out python3-cryptography, the dh_python3 override.
     rules = (debian / "rules").read_text()
-    rules = re.sub(r"\noverride_dh_sphinxdoc:\n(.*\n)*?\nendif\n", "\n", rules)
-    rules = re.sub(r"\noverride_dh_python3:\n(.*\n)*?\n\tdh_python3 --remaining-packages\n",
-                   "\n", rules)
+    rules = remove_make_target(rules, "override_dh_sphinxdoc")
+    if f"dh_python3 -p {OLD_BIN}" in rules:
+        rules = remove_make_target(rules, "override_dh_python3")
     (debian / "rules").write_text(rules)
     for leftover in debian.glob("python-cryptography-doc.*"):
         leftover.unlink()
