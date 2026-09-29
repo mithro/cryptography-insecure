@@ -1,0 +1,21 @@
+Source: cryptography-insecure
+Maintainer: Tim 'mithro' Ansell <me@mith.ro>
+Homepage: https://github.com/mithro/cryptography-insecure
+Vcs-Git: https://github.com/mithro/cryptography-insecure.git
+Vcs-Browser: https://github.com/mithro/cryptography-insecure
+
+Package: python3-cryptography-insecure
+Architecture: any
+Depends: ${misc:Depends},
+         ${python3:Depends},
+         ${shlibs:Depends},
+Description: private cryptography copy for python3-paramiko-insecure
+ A copy of python3-cryptography installed as the module
+ "cryptography_insecure", so that python3-paramiko-insecure keeps working
+ with algorithms the system cryptography is retiring -- DSA, which upstream
+ has deprecated, and 3DES, already moved to hazmat.decrepit.
+ .
+ It is byte for byte the same code as python3-cryptography, only renamed. It
+ is not more secure, nor less; it is simply pinned out of the way. Nothing
+ but python3-paramiko-insecure should use it, and nothing else does: no
+ other package can reach it without importing it by this name.

@@ -1,0 +1,5 @@
+/tmp/
+/src/
+/built-debs/
+/.worktrees/
+__pycache__/

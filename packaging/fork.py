@@ -29,22 +29,18 @@ from pathlib import Path
 OLD, NEW = "cryptography", "cryptography_insecure"
 OLD_SRC, NEW_SRC = "python-cryptography", "cryptography-insecure"
 OLD_BIN, NEW_BIN = "python3-cryptography", "python3-cryptography-insecure"
-DESCRIPTION = """\
-Package: python3-cryptography-insecure
-Architecture: any
-Depends: ${misc:Depends},
-         ${python3:Depends},
-         ${shlibs:Depends},
-Description: private cryptography copy for python3-paramiko-insecure
- A copy of python3-cryptography installed as the module
- "cryptography_insecure", so that python3-paramiko-insecure keeps working
- with algorithms the system cryptography is retiring -- DSA, which upstream
- has deprecated, and 3DES, already moved to hazmat.decrepit.
- .
- It is byte for byte the same code as python3-cryptography, only renamed. It
- is not more secure, nor less; it is simply pinned out of the way. Nothing
- but python3-paramiko-insecure should use it, and nothing else does: no
- other package can reach it without importing it by this name.
+# packaging/debian/cryptography-insecure/control: our fields of the source
+# paragraph (name, maintainer, home), then the binary package, which replaces
+# the source's own binary packages.
+TEMPLATE = Path(__file__).resolve().parent / "debian" / "cryptography-insecure" / "control"
+
+# Debian's test suite tests the module `cryptography` (tests/ is not
+# renamed), so run here it would test nothing of this package. The install
+# test (packaging/install-test.sh) tests cryptography_insecure itself.
+NO_UPSTREAM_TESTS = """\
+override_dh_auto_test:
+\t@echo "cryptography-insecure: upstream's tests test cryptography, not"
+\t@echo "cryptography_insecure; packaging/install-test.sh tests this package."
 """
 
 
@@ -208,15 +204,18 @@ def main():
     debian = root / "debian"
     control = (debian / "control").read_text()
     source, *binaries = control.split("\n\n")
-    source = source.replace(f"Source: {OLD_SRC}", f"Source: {NEW_SRC}")
-    source = re.sub(r"^(Uploaders|Vcs-Git|Vcs-Browser|Homepage):.*\n(\s+.*\n)*",
-                    "", source, flags=re.M)
-    source = source.replace(
-        "Maintainer: Debian Python Team <team+python@tracker.debian.org>",
-        "Maintainer: Tim 'mithro' Ansell <me@mith.ro>")
+    ours, package = TEMPLATE.read_text().split("\n\n", 1)
+    if not source.startswith(f"Source: {OLD_SRC}\n"):
+        raise SystemExit(f"debian/control: expected Source: {OLD_SRC}")
+    # Debian's source paragraph keeps its build dependencies; these fields
+    # are the template's (ours), and Debian's Uploaders go with Maintainer.
+    fields = dict(line.split(": ", 1) for line in ours.splitlines())
+    source = re.sub(r"^(Source|Maintainer|Uploaders|Homepage|Vcs-Git|Vcs-Browser):.*\n(\s+.*\n)*",
+                    "", source + "\n", flags=re.M)
+    source = "".join(f"{k}: {v}\n" for k, v in fields.items()) + source
     # Only the one binary package; the -doc package documents cryptography,
     # which is already installed on any machine wanting this.
-    (debian / "control").write_text(source.rstrip() + "\n\n" + DESCRIPTION)
+    (debian / "control").write_text(source.rstrip() + "\n\n" + package)
 
     edit(debian / "rules", [
         ("export PYBUILD_NAME=cryptography",
@@ -224,13 +223,18 @@ def main():
         ("export DEB_CARGO_CRATE=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM)",
          "export DEB_CARGO_CRATE=python-cryptography_$(DEB_VERSION_UPSTREAM)"),
     ])
-    # Drop overrides that name binary packages which no longer exist here:
-    # the documentation build (there is no -doc package in this fork) and,
-    # where it singles out python3-cryptography, the dh_python3 override.
+    # Drop the documentation build: there is no -doc package in this fork.
     rules = (debian / "rules").read_text()
     rules = remove_make_target(rules, "override_dh_sphinxdoc")
-    if f"dh_python3 -p {OLD_BIN}" in rules:
-        rules = remove_make_target(rules, "override_dh_python3")
+    # Where the dh_python3 override singles out python3-cryptography (from
+    # cryptography 49: `dh_python3 -p python3-cryptography --depends=cffi`),
+    # point it at this package. Dropping it, as this did, drops the
+    # dependency on python3-cffi-backend with it, and the module then can't
+    # be imported on a machine without python3-cryptography.
+    rules = re.sub(rf"(dh_python3 -p ){re.escape(OLD_BIN)}(?![\w-])", rf"\g<1>{NEW_BIN}", rules)
+    if "override_dh_auto_test:" in rules:
+        rules = remove_make_target(rules, "override_dh_auto_test")
+    rules = rules.rstrip("\n") + "\n\n" + NO_UPSTREAM_TESTS
     (debian / "rules").write_text(rules)
     for leftover in debian.glob("python-cryptography-doc.*"):
         leftover.unlink()

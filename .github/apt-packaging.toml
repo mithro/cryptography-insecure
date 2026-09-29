@@ -1,0 +1,15 @@
+# What kind of packaging repository this is, and why it differs from the
+# defaults: mithro/apt-repo-action's docs/packaging.md ("The declaration").
+#
+# Set B, a patch series: this repository is ours (packaging/fork.py, the
+# rename), and the software is fetched at build time: each suite's own
+# Debian python-cryptography source, pinned in packaging/pins.toml.
+kind = "B"
+variant = "patch-series"
+# The defaults (Debian's python-cryptography is Architecture: any), plus
+# bookworm, and raspbian-bookworm with it; raspbian-forky left out for now
+# (the exception below says why).
+suites = ["bookworm", "trixie", "forky", "sid", "raspbian-bookworm", "raspbian-trixie"]
+
+[exceptions]
+PKG-SUITES = "bookworm: python3-paramiko-insecure depends on it, and keeps bookworm (Tim, 2026-09-29: \"it must keep bookworm\"). No raspbian-forky until Raspbian's forky can install the build dependencies: on 2026-09-29 its archive is half-migrated (librust-schemars-dev 1.2.2-2 needs a librust-schemars-derive-dev it doesn't have; its perl is 5.40 under modules built for 5.42)"

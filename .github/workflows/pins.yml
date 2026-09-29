@@ -1,0 +1,20 @@
+name: Pins
+
+# Weekly: does Debian have a newer python-cryptography than a pin in
+# packaging/pins.toml? A failing run is the notification: update the pin,
+# and the build publishes the new source (a security update included).
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 packaging/pins.py stale

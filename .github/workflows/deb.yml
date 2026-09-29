@@ -1,0 +1,138 @@
+name: Debian packages
+
+# Builds python3-cryptography-insecure -- each suite's own Debian
+# python-cryptography source, pinned in packaging/pins.toml and renamed to the
+# module cryptography_insecure by packaging/fork.py -- for every suite and
+# architecture, install-tests each build, and publishes a signed apt
+# repository to https://mith.ro/cryptography-insecure/ through
+# mithro/apt-repo-action (docs/packaging.md there: a Set B patch series).
+#
+# python3-paramiko-insecure (mithro/paramiko-insecure) is what it is for.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deb-${{ github.ref }}
+  # A newer push to a pull request cancels the older build. On the default
+  # branch a running publish is never cancelled: the newest run waits for it,
+  # and replaces any older one still waiting.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the pins and the scripts
+        run: |
+          set -eux
+          python3 packaging/pins.py check
+          python3 -m py_compile packaging/fork.py packaging/pins.py
+          shellcheck packaging/prepare.sh packaging/install-test.sh
+
+  build-deb:
+    needs: test
+    name: build-deb (${{ matrix.suite }} ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    # riscv64 builds under QEMU: the Rust extension is slow there.
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        # Debian's python-cryptography is Architecture: any, so every
+        # architecture (docs/packaging.md, "Architectures"); bookworm has no
+        # riscv64, and the Raspbian suites are armhf (ARMv6) only. bookworm
+        # is declared in .github/apt-packaging.toml.
+        include:
+          - {suite: bookworm, arch: amd64, runner: ubuntu-24.04}
+          - {suite: bookworm, arch: i386, runner: ubuntu-24.04}
+          - {suite: bookworm, arch: arm64, runner: ubuntu-24.04-arm}
+          - {suite: bookworm, arch: armhf, runner: ubuntu-24.04-arm}
+          - {suite: trixie, arch: amd64, runner: ubuntu-24.04}
+          - {suite: trixie, arch: i386, runner: ubuntu-24.04}
+          - {suite: trixie, arch: arm64, runner: ubuntu-24.04-arm}
+          - {suite: trixie, arch: armhf, runner: ubuntu-24.04-arm}
+          - {suite: trixie, arch: riscv64, runner: ubuntu-24.04}
+          - {suite: forky, arch: amd64, runner: ubuntu-24.04}
+          - {suite: forky, arch: i386, runner: ubuntu-24.04}
+          - {suite: forky, arch: arm64, runner: ubuntu-24.04-arm}
+          - {suite: forky, arch: armhf, runner: ubuntu-24.04-arm}
+          - {suite: forky, arch: riscv64, runner: ubuntu-24.04}
+          - {suite: sid, arch: amd64, runner: ubuntu-24.04}
+          - {suite: sid, arch: i386, runner: ubuntu-24.04}
+          - {suite: sid, arch: arm64, runner: ubuntu-24.04-arm}
+          - {suite: sid, arch: armhf, runner: ubuntu-24.04-arm}
+          - {suite: sid, arch: riscv64, runner: ubuntu-24.04}
+          - {suite: raspbian-bookworm, arch: armhf, runner: ubuntu-24.04-arm}
+          - {suite: raspbian-trixie, arch: armhf, runner: ubuntu-24.04-arm}
+          # No raspbian-forky for now (.github/apt-packaging.toml, PKG-SUITES):
+          # Raspbian's forky can't install the build dependencies.
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # the version counts this repository's commits
+
+      # The source is arch-independent, so it is fetched and renamed on the
+      # runner's own platform, pinned: an emulated build job leaves the local
+      # debian:<suite> tag pointing at another architecture's image.
+      - name: Fetch and rename this suite's python-cryptography
+        id: prepare
+        env:
+          SUITE: ${{ matrix.suite }}
+        run: |
+          set -eux
+          case "$RUNNER_ARCH" in
+            X64) platform=linux/amd64 ;;
+            ARM64) platform=linux/arm64 ;;
+            *) echo "::error::unsupported runner $RUNNER_ARCH"; exit 1 ;;
+          esac
+          docker run --rm --platform "$platform" -v "$PWD:/w" -w /w \
+            "debian:${SUITE#raspbian-}" sh packaging/prepare.sh "$SUITE" /w/src
+          echo "version=$(python3 packaging/pins.py version "$SUITE")" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        id: build
+        uses: mithro/apt-repo-action/build-deb@main
+        with:
+          suite: ${{ matrix.suite }}
+          arch: ${{ matrix.arch }}
+          source-dir: src
+          version-tree: .
+          version-args: --owner-tag welland --upstream-debian-version ${{ steps.prepare.outputs.version }}
+
+      - name: Install test
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          PLATFORM: ${{ steps.build.outputs.platform }}
+        run: |
+          docker run --rm --platform "$PLATFORM" \
+            -v "$PWD/built-debs:/debs:ro" -v "$PWD/packaging:/p:ro" \
+            "$IMAGE" sh /p/install-test.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: debs-${{ matrix.suite }}-${{ matrix.arch }}
+          path: built-debs/*.deb
+          if-no-files-found: error
+
+  publish-apt:
+    # Build on pull requests to check them, but publish only from main.
+    if: github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch
+    needs: build-deb
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: mithro/apt-repo-action/.github/workflows/publish-apt.yml@main
+    with:
+      suites: "bookworm trixie forky sid raspbian-bookworm raspbian-trixie"
+      description: "python-cryptography renamed to cryptography_insecure, for python3-paramiko-insecure"
+    secrets:
+      gpg-private-key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
