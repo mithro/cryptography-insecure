@@ -59,7 +59,9 @@ the repository holds the build, and the software is fetched at build time.
   source: its version and the `.dsc`'s SHA-256. A Raspbian suite builds its
   codename's. The weekly **Pins** workflow fails when Debian has a newer
   source than a pin (a security update, say): update the pin, and the build
-  publishes it.
+  publishes it. A pin that has left the archive (sid and forky keep only
+  their newest source) is fetched from snapshot.debian.org instead, with a
+  warning, and checked against the pin the same way.
 - `packaging/prepare.sh` fetches the pinned source in a container of the
   suite, checks it against the pin, and renames it with `packaging/fork.py`:
   the Python package, the Rust extension's module paths, and the Debian
@@ -68,7 +70,9 @@ the repository holds the build, and the software is fetched at build time.
 - The shared `build-deb` builds it for each suite and architecture, and
   `packaging/install-test.sh` tests the result in a clean container: no file
   under the system `cryptography`'s names, DSA sign and verify, and no
-  `cryptography.*` module names taken. Debian's own test suite imports
+  `cryptography.*` module names taken; then again with the suite's own
+  `python3-cryptography` installed too, both imported in one process, each
+  from its own files. Debian's own test suite imports
   `cryptography`, not this package, so the build doesn't run it.
 
 The version is Debian's, followed by ours:
