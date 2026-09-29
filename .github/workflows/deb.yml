@@ -102,19 +102,13 @@ jobs:
 
       - name: Build
         id: build
-        uses: mithro/apt-repo-action/build-deb@build-deb/raspbian-staging-fallback
+        uses: mithro/apt-repo-action/build-deb@main
         with:
           suite: ${{ matrix.suite }}
           arch: ${{ matrix.arch }}
           source-dir: src
           version-tree: .
           version-args: --owner-tag welland --upstream-debian-version ${{ steps.prepare.outputs.version }}
-          # Raspbian's builders haven't rebuilt rust-schemars-derive 1.2.2-2
-          # for armhf, and forky's librust-serde-derive-internals-dev
-          # 0.30.0-4 Breaks the 1.2.2-1 binary it has, so python-cryptography's
-          # Rust build dependencies can't be installed until it is rebuilt
-          # (apt-repo-action docs/packaging.md, "Suites").
-          raspbian-rebuild: ${{ matrix.suite == 'raspbian-forky' && 'rust-schemars-derive' || '' }}
 
       - name: Install test
         env:
