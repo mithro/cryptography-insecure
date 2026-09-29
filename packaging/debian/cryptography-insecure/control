@@ -1,3 +1,9 @@
+Source: cryptography-insecure
+Maintainer: Tim 'mithro' Ansell <me@mith.ro>
+Homepage: https://github.com/mithro/cryptography-insecure
+Vcs-Git: https://github.com/mithro/cryptography-insecure.git
+Vcs-Browser: https://github.com/mithro/cryptography-insecure
+
 Package: python3-cryptography-insecure
 Architecture: any
 Depends: ${misc:Depends},

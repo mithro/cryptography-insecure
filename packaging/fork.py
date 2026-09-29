@@ -29,8 +29,9 @@ from pathlib import Path
 OLD, NEW = "cryptography", "cryptography_insecure"
 OLD_SRC, NEW_SRC = "python-cryptography", "cryptography-insecure"
 OLD_BIN, NEW_BIN = "python3-cryptography", "python3-cryptography-insecure"
-# The binary package: packaging/debian/cryptography-insecure/control, a
-# Debian control stanza, replaces the source's own binary packages.
+# packaging/debian/cryptography-insecure/control: our fields of the source
+# paragraph (name, maintainer, home), then the binary package, which replaces
+# the source's own binary packages.
 TEMPLATE = Path(__file__).resolve().parent / "debian" / "cryptography-insecure" / "control"
 
 # Debian's test suite tests the module `cryptography` (tests/ is not
@@ -203,15 +204,18 @@ def main():
     debian = root / "debian"
     control = (debian / "control").read_text()
     source, *binaries = control.split("\n\n")
-    source = source.replace(f"Source: {OLD_SRC}", f"Source: {NEW_SRC}")
-    source = re.sub(r"^(Uploaders|Vcs-Git|Vcs-Browser|Homepage):.*\n(\s+.*\n)*",
-                    "", source, flags=re.M)
-    source = source.replace(
-        "Maintainer: Debian Python Team <team+python@tracker.debian.org>",
-        "Maintainer: Tim 'mithro' Ansell <me@mith.ro>")
+    ours, package = TEMPLATE.read_text().split("\n\n", 1)
+    if not source.startswith(f"Source: {OLD_SRC}\n"):
+        raise SystemExit(f"debian/control: expected Source: {OLD_SRC}")
+    # Debian's source paragraph keeps its build dependencies; these fields
+    # are the template's (ours), and Debian's Uploaders go with Maintainer.
+    fields = dict(line.split(": ", 1) for line in ours.splitlines())
+    source = re.sub(r"^(Source|Maintainer|Uploaders|Homepage|Vcs-Git|Vcs-Browser):.*\n(\s+.*\n)*",
+                    "", source + "\n", flags=re.M)
+    source = "".join(f"{k}: {v}\n" for k, v in fields.items()) + source
     # Only the one binary package; the -doc package documents cryptography,
     # which is already installed on any machine wanting this.
-    (debian / "control").write_text(source.rstrip() + "\n\n" + TEMPLATE.read_text())
+    (debian / "control").write_text(source.rstrip() + "\n\n" + package)
 
     edit(debian / "rules", [
         ("export PYBUILD_NAME=cryptography",
