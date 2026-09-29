@@ -223,13 +223,15 @@ def main():
         ("export DEB_CARGO_CRATE=$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM)",
          "export DEB_CARGO_CRATE=python-cryptography_$(DEB_VERSION_UPSTREAM)"),
     ])
-    # Drop overrides that name binary packages which no longer exist here:
-    # the documentation build (there is no -doc package in this fork) and,
-    # where it singles out python3-cryptography, the dh_python3 override.
+    # Drop the documentation build: there is no -doc package in this fork.
     rules = (debian / "rules").read_text()
     rules = remove_make_target(rules, "override_dh_sphinxdoc")
-    if f"dh_python3 -p {OLD_BIN}" in rules:
-        rules = remove_make_target(rules, "override_dh_python3")
+    # Where the dh_python3 override singles out python3-cryptography (from
+    # cryptography 49: `dh_python3 -p python3-cryptography --depends=cffi`),
+    # point it at this package. Dropping it, as this did, drops the
+    # dependency on python3-cffi-backend with it, and the module then can't
+    # be imported on a machine without python3-cryptography.
+    rules = re.sub(rf"(dh_python3 -p ){re.escape(OLD_BIN)}(?![\w-])", rf"\g<1>{NEW_BIN}", rules)
     if "override_dh_auto_test:" in rules:
         rules = remove_make_target(rules, "override_dh_auto_test")
     rules = rules.rstrip("\n") + "\n\n" + NO_UPSTREAM_TESTS
