@@ -2,8 +2,8 @@
 
 Debian's own **python-cryptography**, renamed to the module
 **`cryptography_insecure`**, packaged as **`python3-cryptography-insecure`**
-for bookworm, trixie, forky and sid, and for Raspbian bookworm, trixie and
-forky. It is published as a signed APT repository at
+for bookworm, trixie, forky and sid, and for Raspbian bookworm and trixie
+(Raspbian's forky can't install the build dependencies yet). It is published as a signed APT repository at
 <https://mith.ro/cryptography-insecure/>.
 
 It exists for [python3-paramiko-insecure](https://github.com/mithro/paramiko-insecure),
@@ -29,8 +29,8 @@ else in the process. Nothing but paramiko-insecure should import it.
 
 The packages are published as a signed apt repository per suite: put your
 suite's name in place of `trixie` below. The suites are bookworm, trixie,
-forky and sid, and raspbian-bookworm, raspbian-trixie and raspbian-forky for
-32-bit Raspberry Pi OS (64-bit Raspberry Pi OS uses the Debian suites).
+forky and sid, and raspbian-bookworm and raspbian-trixie for 32-bit
+Raspberry Pi OS (64-bit Raspberry Pi OS uses the Debian suites).
 
 ```sh
 sudo install -d -m0755 /etc/apt/keyrings
