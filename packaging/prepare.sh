@@ -50,8 +50,17 @@ apt-get update
 work=$(mktemp -d)
 cd "$work"
 # apt checks each file against the signed Sources index; the pin then checks
-# this is the source the commit names.
-apt-get source --download-only "python-cryptography=$VERSION"
+# this is the source the commit names. A pin can outlive its version in the
+# archive (sid and forky keep only their newest source, and a stable update
+# replaces the one before), so the same files then come from
+# snapshot.debian.org, which keeps every source Debian published: checked
+# against the pin all the same, and dpkg-source -x checks the rest against
+# the .dsc.
+if ! apt-get source --download-only "python-cryptography=$VERSION"; then
+    echo "::warning::python-cryptography $VERSION is no longer in $CODENAME's archive; fetching it from snapshot.debian.org. Move the pin (packaging/pins.toml) to the archive's version."
+    rm -f ./*
+    python3 /w/packaging/pins.py snapshot "$SUITE" .
+fi
 dsc="python-cryptography_${VERSION#*:}.dsc"
 echo "$SHA256  $dsc" | sha256sum -c -
 dpkg-source -x "$dsc" tree

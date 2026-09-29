@@ -5,24 +5,37 @@
     pins.py dsc-sha256 <suite>  the pinned .dsc's SHA-256
     pins.py check               every pin is well-formed
     pins.py stale               fail, listing them, if Debian has a newer source than a pin
+    pins.py snapshot <suite> <dir>  fetch the pinned source's files from snapshot.debian.org
 
 `stale` reads Debian's Sources indexes over https. It only reports: the build
 itself fetches through apt, which verifies the archive's signatures, and
 checks the .dsc against the pin.
 
+`snapshot` is the build's fallback when the pinned version has left the
+archive (sid and forky keep only their newest source; a stable update
+replaces the one before). snapshot.debian.org keeps every source Debian ever
+published: the .dsc is checked against the pin's SHA-256 before anything
+else, each file against the SHA-1 snapshot names it by, and the build's
+dpkg-source -x then checks the other files against the .dsc's own SHA-256s.
+The pin is the root of trust either way.
+
 Standard library only (tomllib: Python 3.11, bookworm's).
 """
+import hashlib
+import json
 import lzma
 import re
 import subprocess
 import sys
 import tomllib
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 PINS = Path(__file__).resolve().parent / "pins.toml"
 SUITES = ["bookworm", "trixie", "forky", "sid"]
 SOURCE = "python-cryptography"
+SNAPSHOT = "https://snapshot.debian.org"
 # Where each suite's newest source can be: the release, and its updates and
 # security archives for the stable releases.
 INDEXES = {
@@ -84,6 +97,35 @@ def newest(suite):
     return best
 
 
+def snapshot(suite, dest):
+    """The pinned source's files, from snapshot.debian.org, into dest."""
+    pin = pin_for(suite)
+    version = pin["version"]
+    url = f"{SNAPSHOT}/mr/package/{SOURCE}/{urllib.parse.quote(version, safe='')}/srcfiles?fileinfo=1"
+    with urllib.request.urlopen(url, timeout=120) as r:
+        listing = json.load(r)
+    dsc = f"{SOURCE}_{version.split(':', 1)[-1]}.dsc"
+    files = {}
+    for f in listing["result"]:
+        names = {i["name"] for i in listing["fileinfo"][f["hash"]]}
+        if len(names) != 1:
+            fail(f"snapshot names {f['hash']} as {', '.join(sorted(names))}")
+        files[names.pop()] = f["hash"]
+    if dsc not in files:
+        fail(f"snapshot.debian.org has no {dsc} for {SOURCE} {version}")
+    # The .dsc first: nothing else is fetched unless it is the pinned one.
+    order = [dsc] + sorted(n for n in files if n != dsc)
+    for name in order:
+        with urllib.request.urlopen(f"{SNAPSHOT}/file/{files[name]}", timeout=600) as r:
+            data = r.read()
+        if hashlib.sha1(data).hexdigest() != files[name]:
+            fail(f"{name} from snapshot.debian.org doesn't match its SHA-1 {files[name]}")
+        if name == dsc and hashlib.sha256(data).hexdigest() != pin["dsc-sha256"]:
+            fail(f"{dsc} from snapshot.debian.org doesn't match the pin's SHA-256")
+        (dest / name).write_bytes(data)
+        print(f"{name}: {len(data)} bytes from snapshot.debian.org")
+
+
 def main():
     args = sys.argv[1:]
     if args[:1] == ["version"] and len(args) == 2:
@@ -93,6 +135,8 @@ def main():
     elif args == ["check"]:
         for suite, pin in load().items():
             print(f"{suite}: {pin['version']}")
+    elif args[:1] == ["snapshot"] and len(args) == 3:
+        snapshot(args[1], Path(args[2]))
     elif args == ["stale"]:
         stale = []
         for suite, pin in load().items():
