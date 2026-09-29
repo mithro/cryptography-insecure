@@ -29,22 +29,17 @@ from pathlib import Path
 OLD, NEW = "cryptography", "cryptography_insecure"
 OLD_SRC, NEW_SRC = "python-cryptography", "cryptography-insecure"
 OLD_BIN, NEW_BIN = "python3-cryptography", "python3-cryptography-insecure"
-DESCRIPTION = """\
-Package: python3-cryptography-insecure
-Architecture: any
-Depends: ${misc:Depends},
-         ${python3:Depends},
-         ${shlibs:Depends},
-Description: private cryptography copy for python3-paramiko-insecure
- A copy of python3-cryptography installed as the module
- "cryptography_insecure", so that python3-paramiko-insecure keeps working
- with algorithms the system cryptography is retiring -- DSA, which upstream
- has deprecated, and 3DES, already moved to hazmat.decrepit.
- .
- It is byte for byte the same code as python3-cryptography, only renamed. It
- is not more secure, nor less; it is simply pinned out of the way. Nothing
- but python3-paramiko-insecure should use it, and nothing else does: no
- other package can reach it without importing it by this name.
+# The binary package: packaging/debian/cryptography-insecure/control, a
+# Debian control stanza, replaces the source's own binary packages.
+TEMPLATE = Path(__file__).resolve().parent / "debian" / "cryptography-insecure" / "control"
+
+# Debian's test suite tests the module `cryptography` (tests/ is not
+# renamed), so run here it would test nothing of this package. The install
+# test (packaging/install-test.sh) tests cryptography_insecure itself.
+NO_UPSTREAM_TESTS = """\
+override_dh_auto_test:
+\t@echo "cryptography-insecure: upstream's tests test cryptography, not"
+\t@echo "cryptography_insecure; packaging/install-test.sh tests this package."
 """
 
 
@@ -216,7 +211,7 @@ def main():
         "Maintainer: Tim 'mithro' Ansell <me@mith.ro>")
     # Only the one binary package; the -doc package documents cryptography,
     # which is already installed on any machine wanting this.
-    (debian / "control").write_text(source.rstrip() + "\n\n" + DESCRIPTION)
+    (debian / "control").write_text(source.rstrip() + "\n\n" + TEMPLATE.read_text())
 
     edit(debian / "rules", [
         ("export PYBUILD_NAME=cryptography",
@@ -231,6 +226,9 @@ def main():
     rules = remove_make_target(rules, "override_dh_sphinxdoc")
     if f"dh_python3 -p {OLD_BIN}" in rules:
         rules = remove_make_target(rules, "override_dh_python3")
+    if "override_dh_auto_test:" in rules:
+        rules = remove_make_target(rules, "override_dh_auto_test")
+    rules = rules.rstrip("\n") + "\n\n" + NO_UPSTREAM_TESTS
     (debian / "rules").write_text(rules)
     for leftover in debian.glob("python-cryptography-doc.*"):
         leftover.unlink()
