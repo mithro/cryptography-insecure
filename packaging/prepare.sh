@@ -56,9 +56,12 @@ cd "$work"
 # snapshot.debian.org, which keeps every source Debian published: checked
 # against the pin all the same, and dpkg-source -x checks the rest against
 # the .dsc.
-if ! apt-get source --download-only "python-cryptography=$VERSION"; then
+# Only a version the archive no longer lists goes to snapshot: any other
+# failure (the network, say) fails the build as it is.
+if apt-cache showsrc python-cryptography | grep -qFx "Version: $VERSION"; then
+    apt-get source --download-only "python-cryptography=$VERSION"
+else
     echo "::warning::python-cryptography $VERSION is no longer in $CODENAME's archive; fetching it from snapshot.debian.org. Move the pin (packaging/pins.toml) to the archive's version."
-    rm -f ./*
     python3 /w/packaging/pins.py snapshot "$SUITE" .
 fi
 dsc="python-cryptography_${VERSION#*:}.dsc"

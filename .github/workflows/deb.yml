@@ -36,6 +36,7 @@ jobs:
           python3 packaging/pins.py check
           python3 -m py_compile packaging/fork.py packaging/pins.py
           shellcheck packaging/prepare.sh packaging/install-test.sh
+          python3 -m unittest discover -s tests -v
 
   build-deb:
     needs: test

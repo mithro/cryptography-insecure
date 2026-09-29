@@ -14,10 +14,10 @@ checks the .dsc against the pin.
 `snapshot` is the build's fallback when the pinned version has left the
 archive (sid and forky keep only their newest source; a stable update
 replaces the one before). snapshot.debian.org keeps every source Debian ever
-published: the .dsc is checked against the pin's SHA-256 before anything
-else, each file against the SHA-1 snapshot names it by, and the build's
-dpkg-source -x then checks the other files against the .dsc's own SHA-256s.
-The pin is the root of trust either way.
+published. Only the pin is trusted: the .dsc must have the pin's SHA-256,
+and only the files that .dsc lists are fetched, each checked against its
+SHA-256 and size there. What else snapshot's listing names is ignored, and
+nothing is written outside the destination.
 
 Standard library only (tomllib: Python 3.11, bookworm's).
 """
@@ -97,33 +97,76 @@ def newest(suite):
     return best
 
 
+# A file name a .dsc may list: a plain basename, nothing that leaves dest.
+PLAIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+~-]*")
+
+
+def dsc_files(dsc):
+    """(name, size, sha256) for each file a .dsc's Checksums-Sha256 lists."""
+    text = dsc.decode("utf-8")
+    m = re.search(r"^Checksums-Sha256:[ \t]*\n((?:[ \t]+\S.*\n)+)", text, re.M)
+    if not m:
+        fail("the .dsc has no Checksums-Sha256")
+    files = []
+    for line in m.group(1).splitlines():
+        sha256, size, name = line.split()
+        if not PLAIN_NAME.fullmatch(name) or ".." in name:
+            fail(f"the .dsc lists {name!r}, which is not a plain file name")
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256) or not size.isdigit():
+            fail(f"the .dsc's Checksums-Sha256 line for {name} is malformed")
+        files.append((name, int(size), sha256))
+    return files
+
+
 def snapshot(suite, dest):
-    """The pinned source's files, from snapshot.debian.org, into dest."""
+    """The pinned source's files, from snapshot.debian.org, into dest.
+
+    Only the pin is trusted: the .dsc must have the pin's SHA-256, and then
+    only the files that .dsc lists are fetched, each checked against the
+    .dsc's own SHA-256 and size. Snapshot's listing only says where to find
+    them: anything else it names is ignored, and nothing is written outside
+    dest."""
     pin = pin_for(suite)
     version = pin["version"]
+    dest = Path(dest).resolve()
     url = f"{SNAPSHOT}/mr/package/{SOURCE}/{urllib.parse.quote(version, safe='')}/srcfiles?fileinfo=1"
     with urllib.request.urlopen(url, timeout=120) as r:
         listing = json.load(r)
-    dsc = f"{SOURCE}_{version.split(':', 1)[-1]}.dsc"
-    files = {}
+    where = {}
     for f in listing["result"]:
-        names = {i["name"] for i in listing["fileinfo"][f["hash"]]}
-        if len(names) != 1:
-            fail(f"snapshot names {f['hash']} as {', '.join(sorted(names))}")
-        files[names.pop()] = f["hash"]
-    if dsc not in files:
-        fail(f"snapshot.debian.org has no {dsc} for {SOURCE} {version}")
-    # The .dsc first: nothing else is fetched unless it is the pinned one.
-    order = [dsc] + sorted(n for n in files if n != dsc)
-    for name in order:
-        with urllib.request.urlopen(f"{SNAPSHOT}/file/{files[name]}", timeout=600) as r:
-            data = r.read()
-        if hashlib.sha1(data).hexdigest() != files[name]:
-            fail(f"{name} from snapshot.debian.org doesn't match its SHA-1 {files[name]}")
-        if name == dsc and hashlib.sha256(data).hexdigest() != pin["dsc-sha256"]:
-            fail(f"{dsc} from snapshot.debian.org doesn't match the pin's SHA-256")
-        (dest / name).write_bytes(data)
+        for info in listing["fileinfo"].get(f["hash"], []):
+            where.setdefault(info["name"], set()).add(f["hash"])
+
+    def fetch(name):
+        hashes = where.get(name)
+        if not hashes:
+            fail(f"snapshot.debian.org lists no {name} for {SOURCE} {version}")
+        for h in sorted(hashes):
+            if not re.fullmatch(r"[0-9a-f]{40}", h):
+                continue
+            with urllib.request.urlopen(f"{SNAPSHOT}/file/{h}", timeout=600) as r:
+                yield r.read()
+
+    def write(name, data):
+        path = (dest / name).resolve()
+        if path.parent != dest:
+            fail(f"{name!r} would be written outside {dest}")
+        path.write_bytes(data)
         print(f"{name}: {len(data)} bytes from snapshot.debian.org")
+
+    # The .dsc first: nothing else is fetched unless it is the pinned one.
+    dsc_name = f"{SOURCE}_{version.split(':', 1)[-1]}.dsc"
+    dsc = next((d for d in fetch(dsc_name)
+                if hashlib.sha256(d).hexdigest() == pin["dsc-sha256"]), None)
+    if dsc is None:
+        fail(f"{dsc_name} from snapshot.debian.org doesn't match the pin's SHA-256")
+    write(dsc_name, dsc)
+    for name, size, sha256 in dsc_files(dsc):
+        data = next((d for d in fetch(name)
+                     if len(d) == size and hashlib.sha256(d).hexdigest() == sha256), None)
+        if data is None:
+            fail(f"{name} from snapshot.debian.org doesn't match the .dsc's SHA-256")
+        write(name, data)
 
 
 def main():
