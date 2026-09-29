@@ -99,8 +99,7 @@ jobs:
 
       - name: Build
         id: build
-        # TODO: @main once mithro/apt-repo-action#37 (--upstream-debian-version) merges.
-        uses: mithro/apt-repo-action/build-deb@deb-version/debian-source
+        uses: mithro/apt-repo-action/build-deb@main
         with:
           suite: ${{ matrix.suite }}
           arch: ${{ matrix.arch }}
