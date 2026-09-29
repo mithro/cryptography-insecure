@@ -29,7 +29,7 @@ else in the process. Nothing but paramiko-insecure should import it.
 
 The packages are published as a signed apt repository per suite: put your
 suite's name in place of `trixie` below. The suites are bookworm, trixie,
-forky and sid, and raspbian-bookworm and raspbian-trixie for 32-bit
+forky and sid, and raspbian-bookworm, raspbian-trixie and raspbian-forky for 32-bit
 Raspberry Pi OS (64-bit Raspberry Pi OS uses the Debian suites).
 
 ```sh

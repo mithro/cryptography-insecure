@@ -72,8 +72,11 @@ jobs:
           - {suite: sid, arch: riscv64, runner: ubuntu-24.04}
           - {suite: raspbian-bookworm, arch: armhf, runner: ubuntu-24.04-arm}
           - {suite: raspbian-trixie, arch: armhf, runner: ubuntu-24.04-arm}
-          # No raspbian-forky for now (.github/apt-packaging.toml, PKG-SUITES):
-          # Raspbian's forky can't install the build dependencies.
+          # Raspbian's forky is half-migrated (perl 5.40 under modules built
+          # for 5.42); build-deb takes what it can't install from
+          # forky-staging, and its install test still checks the packages
+          # install from forky alone (apt-repo-action docs/packaging.md, "Suites").
+          - {suite: raspbian-forky, arch: armhf, runner: ubuntu-24.04-arm}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -132,7 +135,7 @@ jobs:
       id-token: write
     uses: mithro/apt-repo-action/.github/workflows/publish-apt.yml@main
     with:
-      suites: "bookworm trixie forky sid raspbian-bookworm raspbian-trixie"
+      suites: "bookworm trixie forky sid raspbian-bookworm raspbian-trixie raspbian-forky"
       description: "python-cryptography renamed to cryptography_insecure, for python3-paramiko-insecure"
     secrets:
       gpg-private-key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
