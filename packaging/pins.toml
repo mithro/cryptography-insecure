@@ -1,0 +1,27 @@
+# The Debian python-cryptography source each suite builds from: its version
+# (revision included) and the SHA-256 of its .dsc, as Debian's Sources index
+# lists them. A build fetches exactly this, from the suite's own archive
+# (with -updates and -security), so the same commit always builds the same
+# source, and moving a pin is a commit, which raises the version
+# (docs/packaging.md in mithro/apt-repo-action: "Patch series").
+#
+# Raspbian suites build the same Debian source as their codename.
+#
+# `packaging/pins.py stale` (the weekly "Pins" workflow) says when Debian has
+# a newer source than a pin; update the pin, and the build follows.
+
+[bookworm]
+version = "38.0.4-3+deb12u1"
+dsc-sha256 = "08127808ed330565eb3f1ab696fbd6e89f408161d9745d2bad365f78acd7dd16"
+
+[trixie]
+version = "43.0.0-3+deb13u1"
+dsc-sha256 = "8619854d8c6c99dcd28f05c9ccfd4513520de8afb3c59d291f93961f35eba79b"
+
+[forky]
+version = "49.0.0-2"
+dsc-sha256 = "c0d3243f27a5f8e6f6c87c0858114c979b7a092e821da81515154bba27442756"
+
+[sid]
+version = "49.0.0-2"
+dsc-sha256 = "c0d3243f27a5f8e6f6c87c0858114c979b7a092e821da81515154bba27442756"
