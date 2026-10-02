@@ -113,9 +113,9 @@ jobs:
 
       # Debug symbols over 10 MB stay out of the apt repository, which is a
       # GitHub Pages site of at most 1 GB (apt-repo-action docs/packaging.md,
-      # "Package contents"): forky's and sid's are 11-12 MB each, and were
-      # more than half of it. They are uploaded as dbgsym-<suite>-<arch>
-      # instead, which publish-apt doesn't collect.
+      # "Package contents"): forky's, sid's and raspbian-forky's are 11-12 MB
+      # each, and were 376 MB of the 646 MB site. They are uploaded as
+      # dbgsym-<suite>-<arch> instead, which publish-apt doesn't collect.
       - name: Keep large debug symbols out of apt
         env:
           LIMIT_MB: 10
