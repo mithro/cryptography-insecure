@@ -147,6 +147,7 @@ jobs:
           name: debs-${{ matrix.suite }}-${{ matrix.arch }}
           path: built-debs/*.deb
           if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v7
         with:
           name: dbgsym-${{ matrix.suite }}-${{ matrix.arch }}
