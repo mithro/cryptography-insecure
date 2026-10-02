@@ -52,12 +52,18 @@ python3-paramiko-insecure, which needs it.
 ### Debug symbols
 
 `python3-cryptography-insecure-dbgsym` is in the apt repository only where
-it is at most 10 MB: bookworm and trixie (and their Raspbian suites). In
-forky and sid it is 11-12 MB for each architecture, which the repository, a
-GitHub Pages site, has no room to keep versions of. Those are built all the
-same, and are in the `dbgsym-<suite>-<arch>` artifacts of each
+it is at most 10 MB: bookworm, trixie, raspbian-bookworm and
+raspbian-trixie. In forky, sid and raspbian-forky it is 11-12 MB for each
+architecture, and debug-symbol packages over 10 MB are kept out of the apt
+repository: the site was 646 MB of the 1 GB GitHub Pages allows, 376 MB of
+it these packages.
+
+Those are built all the same. They are in the `dbgsym-<suite>-<arch>`
+artifacts of the
 [Debian packages](https://github.com/mithro/cryptography-insecure/actions/workflows/deb.yml)
-run, for 14 days.
+run on `main` that published that version, for 14 days; downloading an
+artifact needs a GitHub login. A pull request's run has them too, but with
+a `~pr<N>` version, which doesn't match the published package.
 
 ## How it is built
 
