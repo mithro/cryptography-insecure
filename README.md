@@ -2,8 +2,8 @@
 
 Debian's own **python-cryptography**, renamed to the module
 **`cryptography_insecure`**, packaged as **`python3-cryptography-insecure`**
-for bookworm, trixie, forky and sid, and for Raspbian bookworm and trixie
-(Raspbian's forky can't install the build dependencies yet). It is published as a signed APT repository at
+for bookworm, trixie, forky and sid, and for Raspbian bookworm, trixie and
+forky. It is published as a signed APT repository at
 <https://mith.ro/cryptography-insecure/>.
 
 It exists for [python3-paramiko-insecure](https://github.com/mithro/paramiko-insecure),
@@ -48,6 +48,22 @@ The repository's signing key is
 
 You normally don't add this repository yourself: install
 python3-paramiko-insecure, which needs it.
+
+### Debug symbols
+
+`python3-cryptography-insecure-dbgsym` is in the apt repository only where
+it is at most 10 MB: bookworm, trixie, raspbian-bookworm and
+raspbian-trixie. In forky, sid and raspbian-forky it is 11-12 MB for each
+architecture, and debug-symbol packages over 10 MB are kept out of the apt
+repository: the site was 646 MB of the 1 GB GitHub Pages allows, 376 MB of
+it these packages.
+
+Those are built all the same. They are in the `dbgsym-<suite>-<arch>`
+artifacts of the
+[Debian packages](https://github.com/mithro/cryptography-insecure/actions/workflows/deb.yml)
+run on `main` that published that version, for 14 days; downloading an
+artifact needs a GitHub login. A pull request's run has them too, but with
+a `~pr<N>` version, which doesn't match the published package.
 
 ## How it is built
 
