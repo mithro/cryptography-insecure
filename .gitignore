@@ -1,5 +1,6 @@
 /tmp/
 /src/
 /built-debs/
+/dbgsym-debs/
 /.worktrees/
 __pycache__/

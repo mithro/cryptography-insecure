@@ -111,6 +111,28 @@ jobs:
           version-tree: .
           version-args: --owner-tag welland --upstream-debian-version ${{ steps.prepare.outputs.version }}
 
+      # Debug symbols over 10 MB stay out of the apt repository, which is a
+      # GitHub Pages site of at most 1 GB (apt-repo-action docs/packaging.md,
+      # "Package contents"): forky's and sid's are 11-12 MB each, and were
+      # more than half of it. They are uploaded as dbgsym-<suite>-<arch>
+      # instead, which publish-apt doesn't collect.
+      - name: Keep large debug symbols out of apt
+        env:
+          LIMIT_MB: 10
+        run: |
+          set -eu
+          limit=$((LIMIT_MB * 1000000))
+          mkdir -p dbgsym-debs
+          for f in built-debs/*-dbgsym_*.deb; do
+            [ -e "$f" ] || continue
+            size=$(stat -c %s "$f")
+            if [ "$size" -gt "$limit" ]; then
+              echo "::notice::$(basename "$f") is $((size / 1000000)) MB, over $LIMIT_MB MB: uploaded as a dbgsym artifact, not published in apt"
+              mv "$f" dbgsym-debs/
+            fi
+          done
+          ls -l built-debs dbgsym-debs
+
       - name: Install test
         env:
           IMAGE: ${{ steps.build.outputs.image }}
@@ -125,6 +147,12 @@ jobs:
           name: debs-${{ matrix.suite }}-${{ matrix.arch }}
           path: built-debs/*.deb
           if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dbgsym-${{ matrix.suite }}-${{ matrix.arch }}
+          path: dbgsym-debs/*.deb
+          if-no-files-found: ignore
+          retention-days: 14
 
   publish-apt:
     # Build on pull requests to check them, but publish only from main.
