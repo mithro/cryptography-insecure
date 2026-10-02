@@ -49,6 +49,16 @@ The repository's signing key is
 You normally don't add this repository yourself: install
 python3-paramiko-insecure, which needs it.
 
+### Debug symbols
+
+`python3-cryptography-insecure-dbgsym` is in the apt repository only where
+it is at most 10 MB: bookworm and trixie (and their Raspbian suites). In
+forky and sid it is 11-12 MB for each architecture, which the repository, a
+GitHub Pages site, has no room to keep versions of. Those are built all the
+same, and are in the `dbgsym-<suite>-<arch>` artifacts of each
+[Debian packages](https://github.com/mithro/cryptography-insecure/actions/workflows/deb.yml)
+run, for 14 days.
+
 ## How it is built
 
 This is a patch series in the sense of
