@@ -2,8 +2,8 @@
 
 Debian's own **python-cryptography**, renamed to the module
 **`cryptography_insecure`**, packaged as **`python3-cryptography-insecure`**
-for bookworm, trixie, forky and sid, and for Raspbian bookworm and trixie
-(Raspbian's forky can't install the build dependencies yet). It is published as a signed APT repository at
+for bookworm, trixie, forky and sid, and for Raspbian bookworm, trixie and
+forky. It is published as a signed APT repository at
 <https://mith.ro/cryptography-insecure/>.
 
 It exists for [python3-paramiko-insecure](https://github.com/mithro/paramiko-insecure),
